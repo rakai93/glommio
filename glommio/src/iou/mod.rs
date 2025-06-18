@@ -35,7 +35,6 @@
 //! means that when processing completion events, you need to be prepared for
 //! the possibility that the completion represents a timeout and not a normal IO
 //! event (`CQE` has a method to check for this).
-use crate::uring_sys;
 
 /// Types related to completion queue events.
 pub mod cqe;
@@ -111,7 +110,7 @@ bitflags::bitflags! {
 /// The main interface to kernel IO using `io_uring`.
 ///
 /// `IoUring` is a high-level wrapper around an
-/// [`io_uring`](uring_sys::io_uring) object.
+/// [`io_uring`](liburing::io_uring) object.
 ///
 /// `IoUring`s are constructed with a requested number of ring buffer entries
 /// and possibly a set of [`SetupFlags`](SetupFlags). Allocations for `IoUring`
@@ -120,7 +119,7 @@ bitflags::bitflags! {
 /// `IoUring`s can either be used directly, or split into separate parts and
 /// operated on without synchronization.
 pub struct IoUring {
-    ring: uring_sys::io_uring,
+    ring: liburing::io_uring,
 }
 
 impl IoUring {
@@ -144,11 +143,11 @@ impl IoUring {
         features: SetupFeatures,
     ) -> io::Result<IoUring> {
         unsafe {
-            let mut params: uring_sys::io_uring_params = mem::zeroed();
+            let mut params: liburing::io_uring_params = mem::zeroed();
             params.flags = flags.bits();
             params.features = features.bits();
             let mut ring = MaybeUninit::uninit();
-            resultify(uring_sys::io_uring_queue_init_params(
+            resultify(liburing::io_uring_queue_init_params(
                 entries as _,
                 ring.as_mut_ptr(),
                 &mut params,
@@ -224,7 +223,7 @@ impl IoUring {
 
     /// Block until a [`CQE`] is ready or timeout.
     pub fn wait_for_cqe_with_timeout(&mut self, duration: Duration) -> io::Result<CQE> {
-        let ts = uring_sys::__kernel_timespec {
+        let ts = liburing::__kernel_timespec {
             tv_sec: duration.as_secs() as _,
             tv_nsec: duration.subsec_nanos() as _,
         };
@@ -258,28 +257,28 @@ impl IoUring {
     fn inner_wait_for_cqes(
         &mut self,
         count: u32,
-        ts: *const uring_sys::__kernel_timespec,
-    ) -> io::Result<&mut uring_sys::io_uring_cqe> {
+        ts: *const liburing::__kernel_timespec,
+    ) -> io::Result<&mut liburing::io_uring_cqe> {
         unsafe {
             let mut cqe = MaybeUninit::uninit();
 
-            resultify(uring_sys::io_uring_wait_cqes(
+            resultify(liburing::io_uring_wait_cqes(
                 &mut self.ring,
                 cqe.as_mut_ptr(),
                 count,
-                ts,
-                ptr::null(),
+                ts.cast_mut(),
+                ptr::null_mut(),
             ))?;
 
             Ok(&mut *cqe.assume_init())
         }
     }
 
-    pub fn raw(&self) -> &uring_sys::io_uring {
+    pub fn raw(&self) -> &liburing::io_uring {
         &self.ring
     }
 
-    pub unsafe fn raw_mut(&mut self) -> &mut uring_sys::io_uring {
+    pub unsafe fn raw_mut(&mut self) -> &mut liburing::io_uring {
         &mut self.ring
     }
 
@@ -318,7 +317,7 @@ impl fmt::Debug for IoUring {
 
 impl Drop for IoUring {
     fn drop(&mut self) {
-        unsafe { uring_sys::io_uring_queue_exit(&mut self.ring) };
+        unsafe { liburing::io_uring_queue_exit(&mut self.ring) };
     }
 }
 

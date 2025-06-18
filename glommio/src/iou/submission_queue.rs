@@ -1,7 +1,6 @@
 use std::{fmt, io, marker::PhantomData, ptr::NonNull, time::Duration};
 
 use super::{resultify, IoUring, SQEs, SQE};
-use crate::uring_sys;
 
 /// The queue of pending IO events.
 ///
@@ -15,7 +14,7 @@ use crate::uring_sys;
 ///
 /// We reify this relationship by using `IO_LINK` to link these events.
 pub struct SubmissionQueue<'ring> {
-    ring: NonNull<uring_sys::io_uring>,
+    ring: NonNull<liburing::io_uring>,
     _marker: PhantomData<&'ring mut IoUring>,
 }
 
@@ -31,9 +30,9 @@ impl<'ring> SubmissionQueue<'ring> {
     /// After that, will return `None`.
     pub fn prepare_sqe(&mut self) -> Option<SQE<'_>> {
         unsafe {
-            let sqe = uring_sys::io_uring_get_sqe(self.ring.as_mut());
+            let sqe = liburing::io_uring_get_sqe(self.ring.as_mut());
             if !sqe.is_null() {
-                uring_sys::io_uring_prep_nop(sqe);
+                liburing::io_uring_prep_nop(sqe);
                 Some(SQE::new(&mut *sqe))
             } else {
                 None
@@ -61,11 +60,11 @@ impl<'ring> SubmissionQueue<'ring> {
     /// If this function encounters any IO errors an
     /// [`io::Error`](std::io::Result) variant is returned.
     pub fn submit(&mut self) -> io::Result<u32> {
-        resultify(unsafe { uring_sys::io_uring_submit(self.ring.as_ptr()) })
+        resultify(unsafe { liburing::io_uring_submit(self.ring.as_ptr()) })
     }
 
     pub fn submit_and_wait(&mut self, wait_for: u32) -> io::Result<u32> {
-        resultify(unsafe { uring_sys::io_uring_submit_and_wait(self.ring.as_ptr(), wait_for as _) })
+        resultify(unsafe { liburing::io_uring_submit_and_wait(self.ring.as_ptr(), wait_for as _) })
     }
 
     pub fn submit_and_wait_with_timeout(
@@ -73,7 +72,7 @@ impl<'ring> SubmissionQueue<'ring> {
         wait_for: u32,
         duration: Duration,
     ) -> io::Result<u32> {
-        let ts = uring_sys::__kernel_timespec {
+        let ts = liburing::__kernel_timespec {
             tv_sec: duration.as_secs() as _,
             tv_nsec: duration.subsec_nanos() as _,
         };
@@ -83,8 +82,8 @@ impl<'ring> SubmissionQueue<'ring> {
                 sqe.clear();
                 unsafe {
                     sqe.prep_timeout(&ts, 0, crate::iou::sqe::TimeoutFlags::empty());
-                    sqe.set_user_data(uring_sys::LIBURING_UDATA_TIMEOUT);
-                    return resultify(uring_sys::io_uring_submit_and_wait(
+                    sqe.set_user_data(u64::MAX);
+                    return resultify(liburing::io_uring_submit_and_wait(
                         self.ring.as_ptr(),
                         wait_for as _,
                     ));
@@ -96,11 +95,11 @@ impl<'ring> SubmissionQueue<'ring> {
     }
 
     pub fn ready(&self) -> u32 {
-        unsafe { uring_sys::io_uring_sq_ready(self.ring.as_ptr()) }
+        unsafe { liburing::io_uring_sq_ready(self.ring.as_ptr()) }
     }
 
     pub fn space_left(&self) -> u32 {
-        unsafe { uring_sys::io_uring_sq_space_left(self.ring.as_ptr()) }
+        unsafe { liburing::io_uring_sq_space_left(self.ring.as_ptr()) }
     }
 }
 

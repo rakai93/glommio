@@ -43,7 +43,6 @@ use crate::{
         membarrier, DirectIo, EnqueuedSource, EnqueuedStatus, InnerSource, IoBuffer,
         PollableStatus, Source, SourceType, Statx, TimeSpec64,
     },
-    uring_sys::{self, IoRingOp},
     GlommioError, IoRequirements, IoStats, ReactorErrorKind, RingIoStats, TaskQueueHandle,
 };
 use ahash::AHashMap;
@@ -70,11 +69,11 @@ enum UringOpDescriptor {
     Close,
     FDataSync,
     Connect(*const SockaddrStorage),
-    LinkTimeout(*const uring_sys::__kernel_timespec),
+    LinkTimeout(*const liburing::__kernel_timespec),
     Accept(*mut SockAddrStorage),
     Fallocate(u64, u64, libc::c_int),
     StatxFd(RawFd, *mut Statx),
-    Timeout(*const uring_sys::__kernel_timespec, u32),
+    Timeout(*const liburing::__kernel_timespec, u32),
     TimeoutRemove(u64),
     SockSend(*const u8, usize, i32),
     SockSendMsg(*mut libc::msghdr, i32),
@@ -203,9 +202,9 @@ impl Drop for UringBuffer {
     }
 }
 
-fn check_supported_operations(ops: &[uring_sys::IoRingOp]) -> bool {
+fn check_supported_operations(ops: &[liburing::io_uring_op]) -> bool {
     unsafe {
-        let probe = uring_sys::io_uring_get_probe();
+        let probe = liburing::io_uring_get_probe();
         if probe.is_null() {
             panic!(
                 "Failed to register a probe. The most likely reason is that your kernel witnessed \
@@ -215,8 +214,7 @@ fn check_supported_operations(ops: &[uring_sys::IoRingOp]) -> bool {
 
         let mut ret = true;
         for op in ops {
-            let opint = *{ op as *const uring_sys::IoRingOp as *const libc::c_int };
-            let sup = uring_sys::io_uring_opcode_supported(probe, opint) > 0;
+            let sup = liburing::io_uring_opcode_supported(probe, *op as _) > 0;
             ret &= sup;
             if !sup {
                 println!(
@@ -225,7 +223,7 @@ fn check_supported_operations(ops: &[uring_sys::IoRingOp]) -> bool {
                 );
             }
         }
-        uring_sys::io_uring_free_probe(probe);
+        liburing::io_uring_free_probe(probe);
         if !ret {
             eprintln!("Your kernel is older than Caesar. Bye");
             std::process::exit(1);
@@ -234,30 +232,30 @@ fn check_supported_operations(ops: &[uring_sys::IoRingOp]) -> bool {
     }
 }
 
-static GLOMMIO_URING_OPS: &[IoRingOp] = &[
-    IoRingOp::IORING_OP_NOP,
-    IoRingOp::IORING_OP_READV,
-    IoRingOp::IORING_OP_WRITEV,
-    IoRingOp::IORING_OP_FSYNC,
-    IoRingOp::IORING_OP_READ_FIXED,
-    IoRingOp::IORING_OP_WRITE_FIXED,
-    IoRingOp::IORING_OP_POLL_ADD,
-    IoRingOp::IORING_OP_POLL_REMOVE,
-    IoRingOp::IORING_OP_SENDMSG,
-    IoRingOp::IORING_OP_RECVMSG,
-    IoRingOp::IORING_OP_TIMEOUT,
-    IoRingOp::IORING_OP_TIMEOUT_REMOVE,
-    IoRingOp::IORING_OP_ACCEPT,
-    IoRingOp::IORING_OP_LINK_TIMEOUT,
-    IoRingOp::IORING_OP_CONNECT,
-    IoRingOp::IORING_OP_FALLOCATE,
-    IoRingOp::IORING_OP_OPENAT,
-    IoRingOp::IORING_OP_CLOSE,
-    IoRingOp::IORING_OP_STATX,
-    IoRingOp::IORING_OP_READ,
-    IoRingOp::IORING_OP_WRITE,
-    IoRingOp::IORING_OP_SEND,
-    IoRingOp::IORING_OP_RECV,
+static GLOMMIO_URING_OPS: &[liburing::io_uring_op] = &[
+    liburing::io_uring_op_IORING_OP_NOP,
+    liburing::io_uring_op_IORING_OP_READV,
+    liburing::io_uring_op_IORING_OP_WRITEV,
+    liburing::io_uring_op_IORING_OP_FSYNC,
+    liburing::io_uring_op_IORING_OP_READ_FIXED,
+    liburing::io_uring_op_IORING_OP_WRITE_FIXED,
+    liburing::io_uring_op_IORING_OP_POLL_ADD,
+    liburing::io_uring_op_IORING_OP_POLL_REMOVE,
+    liburing::io_uring_op_IORING_OP_SENDMSG,
+    liburing::io_uring_op_IORING_OP_RECVMSG,
+    liburing::io_uring_op_IORING_OP_TIMEOUT,
+    liburing::io_uring_op_IORING_OP_TIMEOUT_REMOVE,
+    liburing::io_uring_op_IORING_OP_ACCEPT,
+    liburing::io_uring_op_IORING_OP_LINK_TIMEOUT,
+    liburing::io_uring_op_IORING_OP_CONNECT,
+    liburing::io_uring_op_IORING_OP_FALLOCATE,
+    liburing::io_uring_op_IORING_OP_OPENAT,
+    liburing::io_uring_op_IORING_OP_CLOSE,
+    liburing::io_uring_op_IORING_OP_STATX,
+    liburing::io_uring_op_IORING_OP_READ,
+    liburing::io_uring_op_IORING_OP_WRITE,
+    liburing::io_uring_op_IORING_OP_SEND,
+    liburing::io_uring_op_IORING_OP_RECV,
 ];
 
 lazy_static! {
@@ -388,7 +386,11 @@ fn fill_sqe<F>(
             }
 
             UringOpDescriptor::SockSendMsg(hdr, flags) => {
-                sqe.prep_sendmsg(op.fd, hdr, MsgFlags::from_bits_retain(flags | MSG_ZEROCOPY));
+                sqe.prep_sendmsg(
+                    op.fd,
+                    hdr.cast(),
+                    MsgFlags::from_bits_retain(flags | MSG_ZEROCOPY),
+                );
             }
 
             UringOpDescriptor::SockRecv(len, flags) => {
@@ -423,7 +425,7 @@ fn fill_sqe<F>(
 
                             sqe.prep_recvmsg(
                                 op.fd,
-                                hdr as *mut libc::msghdr,
+                                std::ptr::from_mut(hdr).cast(),
                                 MsgFlags::from_bits_retain(flags),
                             );
                             *slot = Some(buf);
@@ -1102,7 +1104,7 @@ impl SleepableRing {
                 // Waiting here is unsafe because we could end up waiting much longer than
                 // needed.
                 // We make the SQE a no-op and return
-                unsafe { crate::uring_sys::io_uring_prep_nop(sqe_ptr) };
+                unsafe { liburing::io_uring_prep_nop(sqe_ptr) };
                 Err(io::Error::from_raw_os_error(libc::EBUSY))
             } else {
                 // The rings are linked. Goodnight!

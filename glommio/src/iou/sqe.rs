@@ -21,18 +21,18 @@ pub use nix::{
 };
 
 use super::Personality;
-use crate::{sys::Statx, uring_sys};
+use crate::sys::Statx;
 
 /// A pending IO event.
 ///
 /// Can be configured with a set of
 /// [`SubmissionFlags`](crate::sqe::SubmissionFlags).
 pub struct SQE<'a> {
-    sqe: &'a mut uring_sys::io_uring_sqe,
+    sqe: &'a mut liburing::io_uring_sqe,
 }
 
 impl<'a> SQE<'a> {
-    pub(crate) fn new(sqe: &'a mut uring_sys::io_uring_sqe) -> SQE<'a> {
+    pub(crate) fn new(sqe: &'a mut liburing::io_uring_sqe) -> SQE<'a> {
         SQE { sqe }
     }
 
@@ -93,7 +93,7 @@ impl<'a> SQE<'a> {
     /// Set the [`Personality`] associated with this submission.
     #[inline]
     pub fn set_personality(&mut self, personality: Personality) {
-        self.sqe.buf_index.buf_index.personality = personality.id;
+        self.sqe.personality = personality.id;
     }
 
     /// Prepare a read on a file descriptor.
@@ -115,7 +115,7 @@ impl<'a> SQE<'a> {
     ) {
         let len = bufs.len();
         let addr = bufs.as_mut_ptr();
-        uring_sys::io_uring_prep_readv(self.sqe, fd.as_raw_fd(), addr as _, len as _, offset as _);
+        liburing::io_uring_prep_readv(self.sqe, fd.as_raw_fd(), addr as _, len as _, offset as _);
         fd.update_sqe(self);
     }
 
@@ -130,7 +130,7 @@ impl<'a> SQE<'a> {
     ) {
         let len = buf.len();
         let addr = buf.as_mut_ptr();
-        uring_sys::io_uring_prep_read_fixed(
+        liburing::io_uring_prep_read_fixed(
             self.sqe,
             fd.as_raw_fd(),
             addr as _,
@@ -160,7 +160,7 @@ impl<'a> SQE<'a> {
     ) {
         let len = bufs.len();
         let addr = bufs.as_ptr();
-        uring_sys::io_uring_prep_writev(self.sqe, fd.as_raw_fd(), addr as _, len as _, offset as _);
+        liburing::io_uring_prep_writev(self.sqe, fd.as_raw_fd(), addr as _, len as _, offset as _);
         fd.update_sqe(self);
     }
 
@@ -176,7 +176,7 @@ impl<'a> SQE<'a> {
     ) {
         let len = buf.len();
         let addr = buf.as_ptr();
-        uring_sys::io_uring_prep_write_fixed(
+        liburing::io_uring_prep_write_fixed(
             self.sqe,
             fd.as_raw_fd(),
             addr as _,
@@ -190,7 +190,7 @@ impl<'a> SQE<'a> {
     /// Prepare an fsync on a file descriptor.
     #[inline]
     pub unsafe fn prep_fsync(&mut self, fd: impl UringFd, flags: FsyncFlags) {
-        uring_sys::io_uring_prep_fsync(self.sqe, fd.as_raw_fd(), flags.bits() as _);
+        liburing::io_uring_prep_fsync(self.sqe, fd.as_raw_fd(), flags.bits() as _);
         fd.update_sqe(self);
     }
 
@@ -205,7 +205,7 @@ impl<'a> SQE<'a> {
         count: u32,
         flags: SpliceFlags,
     ) {
-        uring_sys::io_uring_prep_splice(
+        liburing::io_uring_prep_splice(
             self.sqe,
             fd_in,
             off_in,
@@ -221,7 +221,7 @@ impl<'a> SQE<'a> {
     pub unsafe fn prep_recv(&mut self, fd: impl UringFd, buf: &mut [u8], flags: MsgFlags) {
         let data = buf.as_mut_ptr() as *mut libc::c_void;
         let len = buf.len();
-        uring_sys::io_uring_prep_recv(self.sqe, fd.as_raw_fd(), data, len, flags.bits());
+        liburing::io_uring_prep_recv(self.sqe, fd.as_raw_fd(), data, len, flags.bits());
         fd.update_sqe(self);
     }
 
@@ -230,7 +230,7 @@ impl<'a> SQE<'a> {
     pub unsafe fn prep_send(&mut self, fd: impl UringFd, buf: &[u8], flags: MsgFlags) {
         let data = buf.as_ptr() as *const libc::c_void as *mut libc::c_void;
         let len = buf.len();
-        uring_sys::io_uring_prep_send(self.sqe, fd.as_raw_fd(), data, len, flags.bits());
+        liburing::io_uring_prep_send(self.sqe, fd.as_raw_fd(), data, len, flags.bits());
         fd.update_sqe(self);
     }
 
@@ -238,10 +238,10 @@ impl<'a> SQE<'a> {
     pub unsafe fn prep_recvmsg(
         &mut self,
         fd: impl UringFd,
-        msg: *mut libc::msghdr,
+        msg: *mut liburing::msghdr,
         flags: MsgFlags,
     ) {
-        uring_sys::io_uring_prep_recvmsg(self.sqe, fd.as_raw_fd(), msg, flags.bits() as _);
+        liburing::io_uring_prep_recvmsg(self.sqe, fd.as_raw_fd(), msg, flags.bits() as _);
         fd.update_sqe(self);
     }
 
@@ -249,10 +249,10 @@ impl<'a> SQE<'a> {
     pub unsafe fn prep_sendmsg(
         &mut self,
         fd: impl UringFd,
-        msg: *mut libc::msghdr,
+        msg: *mut liburing::msghdr,
         flags: MsgFlags,
     ) {
-        uring_sys::io_uring_prep_sendmsg(self.sqe, fd.as_raw_fd(), msg, flags.bits() as _);
+        liburing::io_uring_prep_sendmsg(self.sqe, fd.as_raw_fd(), msg, flags.bits() as _);
         fd.update_sqe(self);
     }
 
@@ -265,7 +265,7 @@ impl<'a> SQE<'a> {
         size: u64,
         flags: FallocateFlags,
     ) {
-        uring_sys::io_uring_prep_fallocate(
+        liburing::io_uring_prep_fallocate(
             self.sqe,
             fd.as_raw_fd(),
             flags.bits() as _,
@@ -285,20 +285,20 @@ impl<'a> SQE<'a> {
         mask: StatxMode,
         buf: &mut Statx,
     ) {
-        uring_sys::io_uring_prep_statx(
+        liburing::io_uring_prep_statx(
             self.sqe,
             dirfd.as_raw_fd(),
             path.as_ptr() as _,
             flags.bits() as _,
             mask.bits() as _,
-            buf as _,
+            std::ptr::from_mut(buf).cast(),
         );
     }
 
     /// Prepare an `openat` event.
     #[inline]
     pub unsafe fn prep_openat(&mut self, fd: impl UringFd, path: &CStr, flags: OFlag, mode: Mode) {
-        uring_sys::io_uring_prep_openat(
+        liburing::io_uring_prep_openat(
             self.sqe,
             fd.as_raw_fd(),
             path.as_ptr() as _,
@@ -312,18 +312,18 @@ impl<'a> SQE<'a> {
     /// Prepare a close event on a file descriptor.
     #[inline]
     pub unsafe fn prep_close(&mut self, fd: impl UringFd) {
-        uring_sys::io_uring_prep_close(self.sqe, fd.as_raw_fd());
+        liburing::io_uring_prep_close(self.sqe, fd.as_raw_fd());
     }
 
     /// Prepare a timeout event.
     #[inline]
     pub unsafe fn prep_timeout(
         &mut self,
-        ts: &uring_sys::__kernel_timespec,
+        ts: &liburing::__kernel_timespec,
         events: u32,
         flags: TimeoutFlags,
     ) {
-        uring_sys::io_uring_prep_timeout(
+        liburing::io_uring_prep_timeout(
             self.sqe,
             ts as *const _ as *mut _,
             events as _,
@@ -333,30 +333,30 @@ impl<'a> SQE<'a> {
 
     #[inline]
     pub unsafe fn prep_timeout_remove(&mut self, user_data: u64) {
-        uring_sys::io_uring_prep_timeout_remove(self.sqe, user_data as _, 0);
+        liburing::io_uring_prep_timeout_remove(self.sqe, user_data as _, 0);
     }
 
     #[inline]
-    pub unsafe fn prep_link_timeout(&mut self, ts: &uring_sys::__kernel_timespec) {
-        uring_sys::io_uring_prep_link_timeout(self.sqe, ts as *const _ as *mut _, 0);
+    pub unsafe fn prep_link_timeout(&mut self, ts: &liburing::__kernel_timespec) {
+        liburing::io_uring_prep_link_timeout(self.sqe, ts as *const _ as *mut _, 0);
     }
 
     #[inline]
     pub unsafe fn prep_poll_add(&mut self, fd: impl UringFd, poll_flags: PollFlags) {
-        uring_sys::io_uring_prep_poll_add(self.sqe, fd.as_raw_fd(), poll_flags.bits());
+        liburing::io_uring_prep_poll_add(self.sqe, fd.as_raw_fd(), poll_flags.bits() as _);
         fd.update_sqe(self);
     }
 
     #[inline]
     pub unsafe fn prep_poll_remove(&mut self, user_data: u64) {
-        uring_sys::io_uring_prep_poll_remove(self.sqe, user_data as _)
+        liburing::io_uring_prep_poll_remove(self.sqe, user_data as _)
     }
 
     #[inline]
     pub unsafe fn prep_connect(&mut self, fd: impl UringFd, socket_addr: &SockaddrStorage) {
         let addr = socket_addr.as_ptr();
         let len = socket_addr.len();
-        uring_sys::io_uring_prep_connect(self.sqe, fd.as_raw_fd(), addr as *mut _, len);
+        liburing::io_uring_prep_connect(self.sqe, fd.as_raw_fd(), addr as *mut _, len);
         fd.update_sqe(self);
     }
 
@@ -374,7 +374,7 @@ impl<'a> SQE<'a> {
             ),
             None => (std::ptr::null_mut(), std::ptr::null_mut()),
         };
-        uring_sys::io_uring_prep_accept(self.sqe, fd.as_raw_fd(), addr, len, flags.bits());
+        liburing::io_uring_prep_accept(self.sqe, fd.as_raw_fd(), addr, len, flags.bits());
         fd.update_sqe(self);
     }
 
@@ -396,7 +396,7 @@ impl<'a> SQE<'a> {
             POSIX_FADV_DONTNEED => libc::POSIX_FADV_DONTNEED,
             _ => unreachable!(),
         };
-        uring_sys::io_uring_prep_fadvise(self.sqe, fd.as_raw_fd(), off as _, len as _, advice);
+        liburing::io_uring_prep_fadvise(self.sqe, fd.as_raw_fd(), off as _, len as _, advice);
         fd.update_sqe(self);
     }
 
@@ -423,7 +423,7 @@ impl<'a> SQE<'a> {
             MADV_FREE => libc::MADV_FREE,
             _ => unreachable!(),
         };
-        uring_sys::io_uring_prep_madvise(
+        liburing::io_uring_prep_madvise(
             self.sqe,
             data.as_mut_ptr() as *mut _,
             data.len() as _,
@@ -446,14 +446,14 @@ impl<'a> SQE<'a> {
             _ => unreachable!(),
         };
         let event = event.map_or(ptr::null_mut(), |event| event as *mut EpollEvent as *mut _);
-        uring_sys::io_uring_prep_epoll_ctl(self.sqe, epoll_fd, fd, op, event);
+        liburing::io_uring_prep_epoll_ctl(self.sqe, epoll_fd, fd, op, event);
     }
 
     #[inline]
     pub unsafe fn prep_files_update(&mut self, files: &[RawFd], offset: u32) {
         let addr = files.as_ptr() as *mut RawFd;
         let len = files.len() as u32;
-        uring_sys::io_uring_prep_files_update(self.sqe, addr, len, offset as _);
+        liburing::io_uring_prep_files_update(self.sqe, addr, len, offset as _);
     }
 
     pub unsafe fn prep_provide_buffers(
@@ -465,7 +465,7 @@ impl<'a> SQE<'a> {
     ) {
         let addr = buffers.as_mut_ptr() as *mut libc::c_void;
         let len = buffers.len() as u32 / count;
-        uring_sys::io_uring_prep_provide_buffers(
+        liburing::io_uring_prep_provide_buffers(
             self.sqe,
             addr,
             len as _,
@@ -476,18 +476,18 @@ impl<'a> SQE<'a> {
     }
 
     pub unsafe fn prep_remove_buffers(&mut self, count: u32, id: BufferGroupId) {
-        uring_sys::io_uring_prep_remove_buffers(self.sqe, count as _, id.id as _);
+        liburing::io_uring_prep_remove_buffers(self.sqe, count as _, id.id as _);
     }
 
     #[inline]
     pub unsafe fn prep_cancel(&mut self, user_data: u64, flags: i32) {
-        uring_sys::io_uring_prep_cancel(self.sqe, user_data as _, flags);
+        liburing::io_uring_prep_cancel(self.sqe, user_data as _, flags);
     }
 
     /// Prepare a no-op event.
     #[inline]
     pub unsafe fn prep_nop(&mut self) {
-        uring_sys::io_uring_prep_nop(self.sqe);
+        liburing::io_uring_prep_nop(self.sqe);
     }
 
     /// Clear event. Clears user data, flags, and any event setup.
@@ -496,14 +496,14 @@ impl<'a> SQE<'a> {
     }
 
     /// Get a reference to the underlying
-    /// [`uring_sys::io_uring_sqe`](uring_sys::io_uring_sqe) object.
+    /// [`liburing::io_uring_sqe`](liburing::io_uring_sqe) object.
     ///
     /// You can use this method to inspect the low-level details of an event.
-    pub fn raw(&self) -> &uring_sys::io_uring_sqe {
+    pub fn raw(&self) -> &liburing::io_uring_sqe {
         self.sqe
     }
 
-    pub unsafe fn raw_mut(&mut self) -> &mut uring_sys::io_uring_sqe {
+    pub unsafe fn raw_mut(&mut self) -> &mut liburing::io_uring_sqe {
         self.sqe
     }
 }
@@ -599,13 +599,13 @@ bitflags::bitflags! {
 
 /// A sequence of [`SQE`]s from the [`SubmissionQueue`][crate::SubmissionQueue].
 pub struct SQEs<'ring> {
-    sq: &'ring mut uring_sys::io_uring,
+    sq: &'ring mut liburing::io_uring,
     count: u32,
     consumed: u32,
 }
 
 impl<'ring> SQEs<'ring> {
-    pub(crate) fn new(sq: &'ring mut uring_sys::io_uring, count: u32) -> SQEs<'ring> {
+    pub(crate) fn new(sq: &'ring mut liburing::io_uring, count: u32) -> SQEs<'ring> {
         SQEs {
             sq,
             count,
@@ -639,8 +639,8 @@ impl<'ring> SQEs<'ring> {
     fn consume(&mut self) -> Option<SQE<'ring>> {
         if self.consumed < self.count {
             unsafe {
-                let sqe = uring_sys::io_uring_get_sqe(self.sq);
-                uring_sys::io_uring_prep_nop(sqe);
+                let sqe = liburing::io_uring_get_sqe(self.sq);
+                liburing::io_uring_prep_nop(sqe);
                 self.consumed += 1;
                 Some(SQE { sqe: &mut *sqe })
             }

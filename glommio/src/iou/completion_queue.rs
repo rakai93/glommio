@@ -6,7 +6,6 @@ use std::{
 };
 
 use super::{resultify, CQEs, CQEsBlocking, IoUring, CQE};
-use crate::uring_sys;
 
 /// The queue of completed IO events.
 ///
@@ -15,7 +14,7 @@ use crate::uring_sys;
 /// Completion does not imply success. Completed events may be
 /// [timeouts](crate::cqe::CQE::is_iou_timeout).
 pub struct CompletionQueue<'ring> {
-    pub(crate) ring: NonNull<uring_sys::io_uring>,
+    pub(crate) ring: NonNull<liburing::io_uring>,
     _marker: PhantomData<&'ring mut IoUring>,
 }
 
@@ -31,7 +30,7 @@ impl<'ring> CompletionQueue<'ring> {
     pub fn peek_for_cqe(&mut self) -> Option<CQE> {
         unsafe {
             let mut cqe = MaybeUninit::uninit();
-            uring_sys::io_uring_peek_cqe(self.ring.as_ptr(), cqe.as_mut_ptr());
+            liburing::io_uring_peek_cqe(self.ring.as_ptr(), cqe.as_mut_ptr());
             let cqe = cqe.assume_init();
             if !cqe.is_null() {
                 Some(CQE::new(self.ring, &mut *cqe))
@@ -61,16 +60,16 @@ impl<'ring> CompletionQueue<'ring> {
     }
 
     #[inline(always)]
-    fn wait_inner(&mut self, count: u32) -> io::Result<&mut uring_sys::io_uring_cqe> {
+    fn wait_inner(&mut self, count: u32) -> io::Result<&mut liburing::io_uring_cqe> {
         unsafe {
             let mut cqe = MaybeUninit::uninit();
 
-            resultify(uring_sys::io_uring_wait_cqes(
+            resultify(liburing::io_uring_wait_cqes(
                 self.ring.as_ptr(),
                 cqe.as_mut_ptr(),
                 count as _,
-                ptr::null(),
-                ptr::null(),
+                ptr::null_mut(),
+                ptr::null_mut(),
             ))?;
 
             Ok(&mut *cqe.assume_init())
@@ -94,15 +93,15 @@ impl<'ring> CompletionQueue<'ring> {
     }
 
     pub fn ready(&self) -> u32 {
-        unsafe { uring_sys::io_uring_cq_ready(self.ring.as_ptr()) }
+        unsafe { liburing::io_uring_cq_ready(self.ring.as_ptr()) }
     }
 
     pub fn eventfd_enabled(&self) -> bool {
-        unsafe { uring_sys::io_uring_cq_eventfd_enabled(self.ring.as_ptr()) }
+        unsafe { liburing::io_uring_cq_eventfd_enabled(self.ring.as_ptr()) }
     }
 
     pub fn eventfd_toggle(&mut self, enabled: bool) -> io::Result<()> {
-        resultify(unsafe { uring_sys::io_uring_cq_eventfd_toggle(self.ring.as_ptr(), enabled) })?;
+        resultify(unsafe { liburing::io_uring_cq_eventfd_toggle(self.ring.as_ptr(), enabled) })?;
         Ok(())
     }
 }

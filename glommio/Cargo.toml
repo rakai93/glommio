@@ -31,6 +31,7 @@ futures-lite = "1.12"
 intrusive-collections = "0.9"
 lazy_static = "1.4"
 libc = "0.2"
+liburing = { git = "https://github.com/rakai93/liburing.git", rev = "072cd56" }
 lockfree = "0.5"
 log = "0.4"
 nix = { version = "0.27", features = ["event", "fs", "ioctl", "mman", "net", "poll", "sched", "time"] }

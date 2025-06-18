@@ -6,7 +6,6 @@ use std::{
 };
 
 use super::{resultify, IoUring};
-use crate::uring_sys;
 
 /// A completed IO event.
 #[derive(Debug)]
@@ -17,7 +16,7 @@ pub struct CQE {
 }
 
 impl CQE {
-    pub fn from_raw(cqe: uring_sys::io_uring_cqe) -> CQE {
+    pub fn from_raw(cqe: liburing::io_uring_cqe) -> CQE {
         CQE {
             user_data: cqe.user_data,
             res: cqe.res,
@@ -33,16 +32,13 @@ impl CQE {
         }
     }
 
-    pub(crate) fn new(
-        ring: NonNull<uring_sys::io_uring>,
-        cqe: &mut uring_sys::io_uring_cqe,
-    ) -> CQE {
+    pub(crate) fn new(ring: NonNull<liburing::io_uring>, cqe: &mut liburing::io_uring_cqe) -> CQE {
         let user_data = cqe.user_data;
         let res = cqe.res;
         let flags = CompletionFlags::from_bits_truncate(cqe.flags);
 
         unsafe {
-            uring_sys::io_uring_cqe_seen(ring.as_ptr(), cqe);
+            liburing::io_uring_cqe_seen(ring.as_ptr(), cqe);
         }
 
         CQE::from_raw_parts(user_data, res, flags)
@@ -78,13 +74,13 @@ unsafe impl Sync for CQE {}
 /// This iterator will be exhausted when there are no `CQE`s ready, and return
 /// `None`.
 pub struct CQEs<'a> {
-    ring: NonNull<uring_sys::io_uring>,
+    ring: NonNull<liburing::io_uring>,
     ready: u32,
     marker: PhantomData<&'a mut IoUring>,
 }
 
 impl<'a> CQEs<'a> {
-    pub(crate) fn new(ring: NonNull<uring_sys::io_uring>) -> CQEs<'a> {
+    pub(crate) fn new(ring: NonNull<liburing::io_uring>) -> CQEs<'a> {
         CQEs {
             ring,
             ready: 0,
@@ -94,14 +90,14 @@ impl<'a> CQEs<'a> {
 
     #[inline(always)]
     fn ready(&self) -> u32 {
-        unsafe { uring_sys::io_uring_cq_ready(self.ring.as_ptr()) }
+        unsafe { liburing::io_uring_cq_ready(self.ring.as_ptr()) }
     }
 
     #[inline(always)]
     fn peek_for_cqe(&mut self) -> Option<CQE> {
         unsafe {
             let mut cqe = MaybeUninit::uninit();
-            uring_sys::io_uring_peek_cqe(self.ring.as_ptr(), cqe.as_mut_ptr());
+            liburing::io_uring_peek_cqe(self.ring.as_ptr(), cqe.as_mut_ptr());
             let cqe = cqe.assume_init();
             if !cqe.is_null() {
                 Some(CQE::new(self.ring, &mut *cqe))
@@ -134,14 +130,14 @@ impl Iterator for CQEs<'_> {
 /// This iterator will never be exhausted; if there are no `CQE`s ready, it will
 /// block until there are.
 pub struct CQEsBlocking<'a> {
-    ring: NonNull<uring_sys::io_uring>,
+    ring: NonNull<liburing::io_uring>,
     ready: u32,
     wait_for: u32,
     marker: PhantomData<&'a mut IoUring>,
 }
 
 impl<'a> CQEsBlocking<'a> {
-    pub(crate) fn new(ring: NonNull<uring_sys::io_uring>, wait_for: u32) -> CQEsBlocking<'a> {
+    pub(crate) fn new(ring: NonNull<liburing::io_uring>, wait_for: u32) -> CQEsBlocking<'a> {
         CQEsBlocking {
             ring,
             ready: 0,
@@ -152,14 +148,14 @@ impl<'a> CQEsBlocking<'a> {
 
     #[inline(always)]
     fn ready(&self) -> u32 {
-        unsafe { uring_sys::io_uring_cq_ready(self.ring.as_ptr()) }
+        unsafe { liburing::io_uring_cq_ready(self.ring.as_ptr()) }
     }
 
     #[inline(always)]
     fn peek_for_cqe(&mut self) -> Option<CQE> {
         unsafe {
             let mut cqe = MaybeUninit::uninit();
-            uring_sys::io_uring_peek_cqe(self.ring.as_ptr(), cqe.as_mut_ptr());
+            liburing::io_uring_peek_cqe(self.ring.as_ptr(), cqe.as_mut_ptr());
             let cqe = cqe.assume_init();
             if !cqe.is_null() {
                 Some(CQE::new(self.ring, &mut *cqe))
@@ -170,16 +166,16 @@ impl<'a> CQEsBlocking<'a> {
     }
 
     #[inline(always)]
-    fn wait(&mut self) -> io::Result<&mut uring_sys::io_uring_cqe> {
+    fn wait(&mut self) -> io::Result<&mut liburing::io_uring_cqe> {
         unsafe {
             let mut cqe = MaybeUninit::uninit();
 
-            resultify(uring_sys::io_uring_wait_cqes(
+            resultify(liburing::io_uring_wait_cqes(
                 self.ring.as_ptr(),
                 cqe.as_mut_ptr(),
                 self.wait_for as _,
-                ptr::null(),
-                ptr::null(),
+                ptr::null_mut(),
+                ptr::null_mut(),
             ))?;
 
             Ok(&mut *cqe.assume_init())

@@ -4,7 +4,7 @@ use std::{
     os::unix::io::{AsRawFd, RawFd},
 };
 
-use crate::{iou::sqe::SQE, uring_sys};
+use crate::iou::sqe::SQE;
 
 pub const PLACEHOLDER_FD: RawFd = -1;
 
@@ -222,7 +222,7 @@ pub trait UringWriteBuf {
 
 impl UringReadBuf for RegisteredBufMut<'_> {
     unsafe fn prep_read(self, fd: impl UringFd, sqe: &mut SQE<'_>, offset: u64) {
-        uring_sys::io_uring_prep_read_fixed(
+        liburing::io_uring_prep_read_fixed(
             sqe.raw_mut(),
             fd.as_raw_fd(),
             self.data.as_mut_ptr() as _,
@@ -236,7 +236,7 @@ impl UringReadBuf for RegisteredBufMut<'_> {
 
 impl UringReadBuf for &'_ mut [u8] {
     unsafe fn prep_read(self, fd: impl UringFd, sqe: &mut SQE<'_>, offset: u64) {
-        uring_sys::io_uring_prep_read(
+        liburing::io_uring_prep_read(
             sqe.raw_mut(),
             fd.as_raw_fd(),
             self.as_mut_ptr() as _,
@@ -249,7 +249,7 @@ impl UringReadBuf for &'_ mut [u8] {
 
 impl UringReadBuf for &'_ mut u64 {
     unsafe fn prep_read(self, fd: impl UringFd, sqe: &mut SQE<'_>, offset: u64) {
-        uring_sys::io_uring_prep_read(
+        liburing::io_uring_prep_read(
             sqe.raw_mut(),
             fd.as_raw_fd(),
             self as *mut _ as _,
@@ -262,7 +262,7 @@ impl UringReadBuf for &'_ mut u64 {
 
 impl UringReadBuf for io::IoSliceMut<'_> {
     unsafe fn prep_read(mut self, fd: impl UringFd, sqe: &mut SQE<'_>, offset: u64) {
-        uring_sys::io_uring_prep_read(
+        liburing::io_uring_prep_read(
             sqe.raw_mut(),
             fd.as_raw_fd(),
             self.as_mut_ptr() as _,
@@ -275,7 +275,7 @@ impl UringReadBuf for io::IoSliceMut<'_> {
 
 impl UringReadBuf for &'_ mut [&'_ mut [u8]] {
     unsafe fn prep_read(self, fd: impl UringFd, sqe: &mut SQE<'_>, offset: u64) {
-        uring_sys::io_uring_prep_readv(
+        liburing::io_uring_prep_readv(
             sqe.raw_mut(),
             fd.as_raw_fd(),
             self.as_mut_ptr() as _,
@@ -288,7 +288,7 @@ impl UringReadBuf for &'_ mut [&'_ mut [u8]] {
 
 impl UringReadBuf for &'_ mut [io::IoSliceMut<'_>] {
     unsafe fn prep_read(self, fd: impl UringFd, sqe: &mut SQE<'_>, offset: u64) {
-        uring_sys::io_uring_prep_readv(
+        liburing::io_uring_prep_readv(
             sqe.raw_mut(),
             fd.as_raw_fd(),
             self.as_mut_ptr() as _,
@@ -301,7 +301,7 @@ impl UringReadBuf for &'_ mut [io::IoSliceMut<'_>] {
 
 impl UringWriteBuf for RegisteredBufRef<'_> {
     unsafe fn prep_write(self, fd: impl UringFd, sqe: &mut SQE<'_>, offset: u64) {
-        uring_sys::io_uring_prep_write_fixed(
+        liburing::io_uring_prep_write_fixed(
             sqe.raw_mut(),
             fd.as_raw_fd(),
             self.data.as_ptr() as _,
@@ -315,7 +315,7 @@ impl UringWriteBuf for RegisteredBufRef<'_> {
 
 impl UringWriteBuf for &'_ [u8] {
     unsafe fn prep_write(self, fd: impl UringFd, sqe: &mut SQE<'_>, offset: u64) {
-        uring_sys::io_uring_prep_write(
+        liburing::io_uring_prep_write(
             sqe.raw_mut(),
             fd.as_raw_fd(),
             self.as_ptr() as _,
@@ -328,7 +328,7 @@ impl UringWriteBuf for &'_ [u8] {
 
 impl UringWriteBuf for io::IoSlice<'_> {
     unsafe fn prep_write(self, fd: impl UringFd, sqe: &mut SQE<'_>, offset: u64) {
-        uring_sys::io_uring_prep_write(
+        liburing::io_uring_prep_write(
             sqe.raw_mut(),
             fd.as_raw_fd(),
             self.as_ptr() as _,
@@ -341,7 +341,7 @@ impl UringWriteBuf for io::IoSlice<'_> {
 
 impl UringWriteBuf for &'_ [io::IoSlice<'_>] {
     unsafe fn prep_write(self, fd: impl UringFd, sqe: &mut SQE<'_>, offset: u64) {
-        uring_sys::io_uring_prep_writev(
+        liburing::io_uring_prep_writev(
             sqe.raw_mut(),
             fd.as_raw_fd(),
             self.as_ptr() as _,
@@ -354,7 +354,7 @@ impl UringWriteBuf for &'_ [io::IoSlice<'_>] {
 
 impl UringWriteBuf for &'_ [&'_ [u8]] {
     unsafe fn prep_write(self, fd: impl UringFd, sqe: &mut SQE<'_>, offset: u64) {
-        uring_sys::io_uring_prep_writev(
+        liburing::io_uring_prep_writev(
             sqe.raw_mut(),
             fd.as_raw_fd(),
             self.as_ptr() as _,

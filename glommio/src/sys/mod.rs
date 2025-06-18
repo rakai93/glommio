@@ -3,7 +3,6 @@
 //
 // This product includes software developed at Datadog (https://www.datadoghq.com/). Copyright 2020 Datadog, Inc.
 //
-use crate::uring_sys;
 use ahash::AHashMap;
 use log::debug;
 use nix::sys::socket::SockaddrLike;
@@ -468,13 +467,13 @@ pub struct StatxTimestamp {
 
 #[derive(Clone, Copy)]
 pub(crate) struct TimeSpec64 {
-    raw: uring_sys::__kernel_timespec,
+    raw: liburing::__kernel_timespec,
 }
 
 impl Default for TimeSpec64 {
     fn default() -> TimeSpec64 {
         TimeSpec64 {
-            raw: uring_sys::__kernel_timespec {
+            raw: liburing::__kernel_timespec {
                 tv_sec: 0,
                 tv_nsec: 0,
             },
@@ -511,7 +510,7 @@ impl TryFrom<Duration> for TimeSpec64 {
     fn try_from(dur: Duration) -> Result<Self, Self::Error> {
         if let Ok(secs) = i64::try_from(dur.as_secs()) {
             Ok(TimeSpec64 {
-                raw: uring_sys::__kernel_timespec {
+                raw: liburing::__kernel_timespec {
                     tv_sec: secs,
                     tv_nsec: dur.subsec_nanos() as libc::c_longlong,
                 },
@@ -524,7 +523,7 @@ impl TryFrom<Duration> for TimeSpec64 {
 
 impl TimeSpec64 {
     pub const MAX: TimeSpec64 = TimeSpec64 {
-        raw: uring_sys::__kernel_timespec {
+        raw: liburing::__kernel_timespec {
             tv_sec: i64::MAX,
             tv_nsec: 999_999_999,
         },

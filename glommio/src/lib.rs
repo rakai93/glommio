@@ -292,10 +292,6 @@ mod reactor;
 mod sys;
 pub mod task;
 
-#[allow(dead_code)]
-#[allow(clippy::upper_case_acronyms)]
-mod uring_sys;
-
 #[cfg(feature = "bench")]
 #[doc(hidden)]
 pub mod nop;

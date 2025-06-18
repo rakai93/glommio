@@ -15,7 +15,6 @@ mod registered;
 use std::{fmt, io, marker::PhantomData, os::unix::io::RawFd, ptr::NonNull};
 
 use super::{resultify, IoUring, Probe};
-use crate::uring_sys;
 
 pub use registered::*;
 
@@ -35,7 +34,7 @@ pub use registered::*;
 /// you can register a [placeholder](PLACEHOLDER_FD) descriptor and
 /// [update](crate::registrar::Registrar::update_registered_files) it later.
 pub struct Registrar<'ring> {
-    ring: NonNull<uring_sys::io_uring>,
+    ring: NonNull<liburing::io_uring>,
     _marker: PhantomData<&'ring mut IoUring>,
 }
 
@@ -54,7 +53,7 @@ impl<'ring> Registrar<'ring> {
         let len = buffers.len();
         let addr = buffers.as_ptr() as *const _;
         resultify(unsafe {
-            uring_sys::io_uring_register_buffers(self.ring.as_ptr(), addr, len as _)
+            liburing::io_uring_register_buffers(self.ring.as_ptr(), addr, len as _)
         })?;
         Ok(buffers
             .into_iter()
@@ -69,7 +68,7 @@ impl<'ring> Registrar<'ring> {
         let len = buffers.len();
         let addr = buffers.as_ptr() as *const _;
         resultify(unsafe {
-            uring_sys::io_uring_register_buffers(self.ring.as_ptr(), addr, len as _)
+            liburing::io_uring_register_buffers(self.ring.as_ptr(), addr, len as _)
         })?;
         Ok(buffers
             .iter()
@@ -84,7 +83,7 @@ impl<'ring> Registrar<'ring> {
         let len = buffers.len();
         let addr = buffers.as_ptr() as *const _;
         resultify(unsafe {
-            uring_sys::io_uring_register_buffers(self.ring.as_ptr(), addr, len as _)
+            liburing::io_uring_register_buffers(self.ring.as_ptr(), addr, len as _)
         })?;
         Ok(buffers
             .iter_mut()
@@ -96,7 +95,7 @@ impl<'ring> Registrar<'ring> {
     /// method is often unnecessary, because all buffers will be unregistered
     /// automatically when the ring is dropped.
     pub fn unregister_buffers(&self) -> io::Result<()> {
-        resultify(unsafe { uring_sys::io_uring_unregister_buffers(self.ring.as_ptr()) })?;
+        resultify(unsafe { liburing::io_uring_unregister_buffers(self.ring.as_ptr()) })?;
         Ok(())
     }
 
@@ -109,7 +108,7 @@ impl<'ring> Registrar<'ring> {
     /// Returns an error if
     /// * there is a preexisting set of registered files,
     /// * the `files` slice was empty,
-    /// * the inner [`io_uring_register_files`](uring_sys::
+    /// * the inner [`io_uring_register_files`](liburing::
     ///   io_uring_register_files) call failed for another reason
     pub fn register_files<'a>(
         &self,
@@ -117,7 +116,7 @@ impl<'ring> Registrar<'ring> {
     ) -> io::Result<impl Iterator<Item = RegisteredFd> + 'a> {
         assert!(files.len() <= u32::MAX as usize);
         resultify(unsafe {
-            uring_sys::io_uring_register_files(
+            liburing::io_uring_register_files(
                 self.ring.as_ptr(),
                 files.as_ptr() as *const _,
                 files.len() as _,
@@ -141,7 +140,7 @@ impl<'ring> Registrar<'ring> {
     /// * the `files` slice was empty,
     /// * `offset` is out of bounds,
     /// * the `files` slice was too large,
-    /// * the inner [`io_uring_register_files_update`](uring_sys::
+    /// * the inner [`io_uring_register_files_update`](liburing::
     ///   io_uring_register_files_update) call failed for another reason
     pub fn update_registered_files<'a>(
         &mut self,
@@ -150,7 +149,7 @@ impl<'ring> Registrar<'ring> {
     ) -> io::Result<impl Iterator<Item = RegisteredFd> + 'a> {
         assert!(files.len() + offset <= u32::MAX as usize);
         resultify(unsafe {
-            uring_sys::io_uring_register_files_update(
+            liburing::io_uring_register_files_update(
                 self.ring.as_ptr(),
                 offset as _,
                 files.as_ptr() as *const _,
@@ -164,37 +163,36 @@ impl<'ring> Registrar<'ring> {
     }
 
     pub fn unregister_files(&self) -> io::Result<()> {
-        resultify(unsafe { uring_sys::io_uring_unregister_files(self.ring.as_ptr()) })?;
+        resultify(unsafe { liburing::io_uring_unregister_files(self.ring.as_ptr()) })?;
         Ok(())
     }
 
     pub fn register_eventfd(&self, eventfd: RawFd) -> io::Result<()> {
-        resultify(unsafe { uring_sys::io_uring_register_eventfd(self.ring.as_ptr(), eventfd) })?;
+        resultify(unsafe { liburing::io_uring_register_eventfd(self.ring.as_ptr(), eventfd) })?;
         Ok(())
     }
 
     pub fn register_eventfd_async(&self, eventfd: RawFd) -> io::Result<()> {
         resultify(unsafe {
-            uring_sys::io_uring_register_eventfd_async(self.ring.as_ptr(), eventfd)
+            liburing::io_uring_register_eventfd_async(self.ring.as_ptr(), eventfd)
         })?;
         Ok(())
     }
 
     pub fn unregister_eventfd(&self) -> io::Result<()> {
-        resultify(unsafe { uring_sys::io_uring_unregister_eventfd(self.ring.as_ptr()) })?;
+        resultify(unsafe { liburing::io_uring_unregister_eventfd(self.ring.as_ptr()) })?;
         Ok(())
     }
 
     pub fn register_personality(&self) -> io::Result<Personality> {
-        let id =
-            resultify(unsafe { uring_sys::io_uring_register_personality(self.ring.as_ptr()) })?;
+        let id = resultify(unsafe { liburing::io_uring_register_personality(self.ring.as_ptr()) })?;
         debug_assert!(id < u16::MAX as u32);
         Ok(Personality { id: id as u16 })
     }
 
     pub fn unregister_personality(&self, personality: Personality) -> io::Result<()> {
         resultify(unsafe {
-            uring_sys::io_uring_unregister_personality(self.ring.as_ptr(), personality.id as _)
+            liburing::io_uring_unregister_personality(self.ring.as_ptr(), personality.id as _)
         })?;
         Ok(())
     }
