@@ -658,6 +658,42 @@ impl DmaStreamWriterBuilder {
         }
     }
 
+    /// Creates a new DmaStreamWriterBuilder, given a shared pointer to a
+    /// [`DmaFile`]
+    ///
+    /// Various properties can be set by using its `with` methods.
+    ///
+    /// A [`DmaStreamWriter`] can later be constructed from it by
+    /// calling [`build`]
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use std::rc::Rc;
+    /// use glommio::{
+    ///     io::{DmaFile, DmaStreamWriterBuilder},
+    ///     LocalExecutor,
+    /// };
+    ///
+    /// let ex = LocalExecutor::default();
+    /// ex.run(async {
+    ///     let file = Rc::new(DmaFile::create("myfile.txt").await.unwrap());
+    ///     let _writer = DmaStreamWriterBuilder::from_rc(file).build();
+    /// });
+    /// ```
+    /// [`DmaFile`]: struct.DmaFile.html
+    /// [`DmaStreamWriter`]: struct.DmaStreamWriter.html
+    /// [`build`]: #method.build
+    #[must_use = "The builder must be built to be useful"]
+    pub fn from_rc(file: Rc<DmaFile>) -> DmaStreamWriterBuilder {
+        DmaStreamWriterBuilder {
+            buffer_size: 128 << 10,
+            write_behind: 4,
+            sync_on_close: true,
+            file,
+        }
+    }
+
     /// Define the number of write-behind buffers that will be used by the
     /// [`DmaStreamWriter`]
     ///
